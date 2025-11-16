@@ -1,4 +1,4 @@
-<?php
+?php
 /*
 Plugin Name: Path-Safe Slug Redirect
 Plugin URI: https://github.com/highTower/append-qs
@@ -8,7 +8,7 @@ Author: highTower
 */
 
 // 1. Slug aus dem ersten Pfadsegment extrahieren
-yourls_add_filter('request', 'ht_custom_slug_from_first_path');
+yourls_add_filter('get_request', 'ht_custom_slug_from_first_path');
 function ht_custom_slug_from_first_path($request) {
     // Wenn ein Pfad vorhanden ist (nicht leer)
     if (!empty($_SERVER['REQUEST_URI'])) {
@@ -35,6 +35,7 @@ function ht_append_path_and_query($url) {
     if (!empty($subpath)) {
         $subpath = '/' . $subpath;
     }
+    $url .= $subpath;
 
     // Query-String anhängen, falls vorhanden
     if (!empty($_SERVER['QUERY_STRING'])) {
@@ -44,18 +45,6 @@ function ht_append_path_and_query($url) {
         $url .= $separator . $query_string;
     }
 
-    // Ziel-URL parsen & Subpfad korrekt anfügen
-    $parsed = parse_url($url);
-    $base_path = rtrim($parsed['path'] ?? '', '/');
-
-    $final_url = 
-        ($parsed['scheme'] ?? 'http') . '://' .
-        ($parsed['host'] ?? '') .
-        (isset($parsed['port']) ? ':' . $parsed['port'] : '') .
-        $base_path . $subpath .
-        (isset($parsed['query']) ? '?' . $parsed['query'] : '') .
-        (isset($parsed['fragment']) ? '#' . $parsed['fragment'] : '');
-
-    return $final_url;
+    return $url;
 }
 ?>
