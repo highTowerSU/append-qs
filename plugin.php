@@ -1,35 +1,61 @@
 <?php
 /*
-Plugin Name: Append Query String
-Plugin URI: https://github.com/drockney/append-qs
-Description: Appends a query string to the URL
-Version: 1.0
-Author: Doug Rockney
-Author URI: https://github.com/drockney
+Plugin Name: Path-Safe Slug Redirect
+Plugin URI: https://github.com/highTower/append-qs
+Description: Allows using first path segment as YOURLS slug and appends remaining path & query string to target URL.
+Version: 1.4
+Author: highTower
 */
 
-// Hook our custom function into the 'pre_redirect' event
-yourls_add_filter('redirect_location', 'append_qs_redirect' );
-
-// Our custom function that will be triggered when the event occurs
-function append_qs_redirect($url) {
-
-    parse_str($_SERVER['QUERY_STRING'], $query);
-
-    if (isset($query)) {
-	$appendme .= '?';
-        $it = new RecursiveIteratorIterator(new RecursiveArrayIterator($query));
-        foreach ($it as $key=>$val) {
-                if (isset($key)) {
-                    $appendme .= $key;
-                }
-                if (isset($val)) {
-                    $appendme .= '='.$val;
-                }
+// 1. Slug aus dem ersten Pfadsegment extrahieren
+yourls_add_filter('request', 'ht_custom_slug_from_first_path');
+function ht_custom_slug_from_first_path($request) {
+    // Wenn ein Pfad vorhanden ist (nicht leer)
+    if (!empty($_SERVER['REQUEST_URI'])) {
+        $request_path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+        $parts = explode('/', trim($request_path, '/'));
+        if (!empty($parts)) {
+            return $parts[0]; // NUR das erste Element = Slug
         }
-        return $url.$appendme;
     }
-
+    return $request; // Fallback
 }
 
+// 2. Subpfade + Query an Ziel-URL anhängen
+yourls_add_filter('redirect_location', 'ht_append_path_and_query');
+function ht_append_path_and_query($url) {
+    $request_path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    $parts = explode('/', trim($request_path, '/'));
+
+    // Erstes Segment ist der Slug → entfernen
+    array_shift($parts);
+
+    // Rest zusammenbauen
+    $subpath = implode('/', $parts);
+    if (!empty($subpath)) {
+        $subpath = '/' . $subpath;
+    }
+
+    // Query-String anhängen, falls vorhanden
+    if (!empty($_SERVER['QUERY_STRING'])) {
+        parse_str($_SERVER['QUERY_STRING'], $query);
+        $query_string = http_build_query($query);
+        $separator = (strpos($url, '?') === false) ? '?' : '&';
+        $url .= $separator . $query_string;
+    }
+
+    // Ziel-URL parsen & Subpfad korrekt anfügen
+    $parsed = parse_url($url);
+    $base_path = rtrim($parsed['path'] ?? '', '/');
+
+    $final_url = 
+        ($parsed['scheme'] ?? 'http') . '://' .
+        ($parsed['host'] ?? '') .
+        (isset($parsed['port']) ? ':' . $parsed['port'] : '') .
+        $base_path . $subpath .
+        (isset($parsed['query']) ? '?' . $parsed['query'] : '') .
+        (isset($parsed['fragment']) ? '#' . $parsed['fragment'] : '');
+
+    return $final_url;
+}
 ?>
